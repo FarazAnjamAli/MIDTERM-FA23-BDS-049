@@ -2,7 +2,8 @@ pipeline {
     agent any
     triggers { githubPush() }
     environment {
-        IMAGE = 'midterm-fa23-bds-049'
+        IMAGE = 'farazanjamali/midterm-fa23-bds-049'
+        CONTAINER = 'midterm-fa23-bds-049'
     }
     stages {
         stage('Fetch latest data') {
@@ -27,11 +28,23 @@ pipeline {
                 sh 'docker build --build-arg GIT_COMMIT=$GIT_SHA -t $IMAGE:latest .'
             }
         }
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+                    sh '''
+                    echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                    docker push $IMAGE:latest
+                    docker logout
+                    '''
+                }
+            }
+        }
         stage('Deploy on EC2') {
             steps {
                 sh '''
-                docker rm -f $IMAGE || true
-                docker run -d --name $IMAGE --restart unless-stopped -p 8000:8000 $IMAGE:latest
+                docker rm -f $CONTAINER || true
+                docker run -d --name $CONTAINER --restart unless-stopped -p 8000:8000 $IMAGE:latest
+                docker image prune -f
                 sleep 8
                 curl -sf http://localhost:8000/metrics
                 '''
